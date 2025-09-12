@@ -7,11 +7,11 @@
 #include <libpq-fe.h>
 using json = nlohmann::json;
 
-DBManager(std::string conninfo) {
+DBManager::DBManager(const char* conninfo) {
     connection(conninfo);
 }
 
-void DBManager::connection(std::string conninfo) {
+void DBManager::connection(const char* conninfo) {
     conn = PQconnectdb(conninfo);
 
     if (PQstatus(conn) != CONNECTION_OK) {
@@ -20,26 +20,42 @@ void DBManager::connection(std::string conninfo) {
     }
 }
 
-void DBManager::log(std::message, std::status, std::string error_info = "NoN") {
+void DBManager::log(std::string message, std::string status, std::string error_info) {
     std::cout << message << " -- " << status << " -- " << error_info << std::endl;
 }
 
-struct UserData {
-    int id;
-    std::string unique_name = "null";
-    std::string first_name;
-    std::string second_name;
-    std::string third_name;
-    std::string key;
-    bool status = false;
-};
 typedef uWS::WebSocket<false, true, UserData>* websock;
 
-std::map<std::string, websock> connected = {};
+void DBManager::make_record(std::map<std::string, std::string> attr, std::string table_name) {
+    int args_count = attr.size();
+    std::string query = "insert into " + table_name + "(";
+    std::string args_part = "";
+    int count = 0;
+    for (auto& p : attr) {
+        count += 1;
+        if (count < args_count)
+        {
+            query += p.first + ",";
+            args_part += "'" + p.second + "',";
+        }
+        else {
+            query += p.first + ")";
+            args_part += "'" + p.second + "'";
+        }
+            
+    }
+    query += "values (" + args_part + ");"; 
 
-std::map<std::string, std::string> app_data = {};
+    const char* query_massive = query.c_str(); 
+    PGresult* result = PQexec(conn, query_massive);
+    if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+        std::cout << PQresultStatus(result);
+        log("error to insert", "ERROR", PQerrorMessage(conn));
+        PQclear(result);
+    }
+}
 
-void log_info(std::string info, std::string grade, std::string from_user, std::string to_user) {
+void AManager::log_info(std::string info, std::string grade, std::string from_user, std::string to_user) {
     time_t now;
     std::time(&now);
     char* formatted_now = ctime(&now);
@@ -50,7 +66,7 @@ void log_info(std::string info, std::string grade, std::string from_user, std::s
     std::cout << std::endl;
 }
 
-void process_public_message(websock ws, json parsed_data)
+void AManager::process_public_message( websock ws, json parsed_data)
 {
     UserData* data = ws->getUserData();
     json payload = {
@@ -63,7 +79,7 @@ void process_public_message(websock ws, json parsed_data)
     log_info("send public message", "INFO", data->unique_name);
 }
 
-void process_set_user( uWS::App& app, websock ws, json parsed_data, uWS::OpCode opcode)
+void AManager::process_set_user(websock ws, json parsed_data, uWS::OpCode opcode)
 {
     UserData* data = ws->getUserData(); 
         
@@ -71,14 +87,21 @@ void process_set_user( uWS::App& app, websock ws, json parsed_data, uWS::OpCode 
     payload2["command"] = "SET_USER_MSG";
     payload2["name"] = parsed_data["unique_name"];
     
-    bool found = connected.count(parsed_data["unique_name"]);
+    bool found = unique_exist(parsed_data["unique_name"]); 
 
     if (!found) { 
         data->unique_name = parsed_data["unique_name"];
         payload2["status"] = "OK";
-        connected[parsed_data["unique_name"]] = ws;
         ws->subscribe(data->unique_name);
         ws->unsubscribe(data->first_name);
+        std::map<std::string, std::string> rec;
+        rec["unique_name"] = parsed_data["unique_name"];
+        rec["first_name"] = data->first_name;
+        rec["third_name"] = data->first_name;
+        rec["second_name"] = data->first_name;
+        rec["status"] = "true";
+        this->dbm.make_record(rec, "users");
+
         log_info("set user info", "INFO", data->unique_name);
         app.publish(data->unique_name, payload2.dump(), opcode);
     } else {
@@ -86,11 +109,77 @@ void process_set_user( uWS::App& app, websock ws, json parsed_data, uWS::OpCode 
         log_info("set user info", "ERROR", data->first_name, parsed_data["unique_name"]);
         app.publish(data->first_name, payload2.dump(), opcode);
     }
+
+
     
 }
 
+res_tuple DBManager::make_select_request(std::vector<std::string> args, std::string table_name, std::string where_filter) {
+    std::string request_columns = "";
+    int args_count = args.size();
+    for (int i = 0; i < args_count - 1; i++) {
+        request_columns += args[i] + ", "; 
+    }
+    request_columns += " " + args[args_count - 1];
 
-void process_private_message(websock ws, json parsed)
+    std::string query = "select " + request_columns + " from " + table_name;
+    if (where_filter != "null") query += "  where " + where_filter;
+    query += ";";
+    const char* query_massive = query.c_str(); 
+    PGresult* res = PQexec(conn, query_massive);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cout << PQresultStatus(res);
+        log("error to select", "ERROR", PQerrorMessage(conn));
+        PQclear(res);
+        
+        return make_map_frompg(res, false);
+    } else return make_map_frompg(res);
+}
+
+res_tuple DBManager::make_map_frompg(PGresult* res, bool success) {
+    res_tuple result;
+    if (success){
+        std::map<std::string, std::vector<std::string>> map_res;
+                
+        int rows_count = PQntuples(res);
+        int cols_count = PQnfields(res);
+        result["info"] = {};
+        result["info"]["error"] = {"false"};
+        result["info"]["empty"] = {"false"};
+        if (rows_count == 0) {
+             result["info"]["empty"] = {"true"};
+             return result;
+        }
+
+        for (int i = 0; i < cols_count; i++)
+        {
+            std::vector<std::string> row;
+
+            for (int j = 0; j < rows_count; j++) {
+                row.push_back(PQgetvalue(res, j, i));
+            }
+            map_res[PQfname(res, i)] = row;
+        }
+
+         
+        result["result"] = map_res;
+        return result;
+    }
+    result["info"]["error"] = {"true"};
+    return result;
+}
+
+bool AManager::unique_exist(std::string unique_name) {
+    std::vector<std::string> attrs = {"unique_name"};
+    std::string where = "unique_name = '" + unique_name + "'";
+    res_tuple r_result = dbm.make_select_request(attrs, "users", where);
+
+    if (r_result["info"]["error"][0] == "false" and r_result["info"]["empty"][0] == "false")
+        return true;
+    return false;
+}
+
+void AManager::process_private_message(websock ws, json parsed)
 {
     UserData* data = ws->getUserData();
     json payload;
@@ -125,15 +214,15 @@ void process_user_connect(uWS::App& app, websock ws, json parsed_data, uWS::OpCo
     app.publish(d->unique_name, message.dump(), opcode);
 }
 
-void process_add_sub_user(uWS::App& app, websock ws, json data, uWS::OpCode opcode)
+void AManager::process_add_sub_user(websock ws, json data, uWS::OpCode opcode)
 {
     UserData* user_data = ws->getUserData();
     json payload = {{"command", "ADD_CHAT"},
                      {"result", "failed"}};
     
-    bool found = connected.count(data["name"]); 
+    bool found = unique_exist(data["name"]); 
     if (data["message"] != "") payload["message"] = data["message"];
-    if (found && connected[(data["name"])]->getUserData()->status)
+    if (found)
     {
         payload["result"] = "done";
         payload["name"] = data["name"];
@@ -146,25 +235,22 @@ void process_add_sub_user(uWS::App& app, websock ws, json data, uWS::OpCode opco
     app.publish(user_data->unique_name, payload.dump(), opcode);   
 }
 
-int main()
-{
-    int latest_user_id = 0;
-    uWS::App app = uWS::App();
+AManager::AManager() {
 
-    uWS::TemplatedApp<false>::WebSocketBehavior<UserData> wsb = {
+    wsb = {
 
-        .open = [&latest_user_id](websock ws) {
+        .open = [this](websock ws) {
             UserData* data = ws->getUserData();
-            data->id = latest_user_id++;
             data->status = true;
-            data->first_name = "UnnamedUser#" + std::to_string(data->id);
-            log_info("new user:", "INFO", data->first_name);
+            data->first_name = "UnnamedUser";
+            this->log_info("new user:", "INFO", data->first_name);
             ws->subscribe("PUBLIC_CHANNEL");
             ws->subscribe(data->first_name);
             ws->publish("PUBLIC_CHANNEL", user_status(data, true));
+            
         },
 
-        .message = [&app](websock ws, std::string_view message, uWS::OpCode opcode) {
+        .message = [this](websock ws, std::string_view message, uWS::OpCode opcode) {
 	    UserData* data = ws->getUserData();
         std::string command;
         json parsed_data;
@@ -178,42 +264,52 @@ int main()
 	    if (command.empty()) {
             std::string info = "no command in message";
             if (data->unique_name == "null")
-		        log_info(info + str_mes, "ERROR", data->unique_name);
+		        this->log_info(info + str_mes, "ERROR", data->unique_name);
             else
-                log_info(info + str_mes, "ERROR", data->first_name);
+                this->log_info(info + str_mes, "ERROR", data->first_name);
         } else {
 
             if (command == "PUBLIC_MSG")
             {
-                process_public_message(ws, parsed_data);
+                this->process_public_message(ws, parsed_data);
             }
             else if (command == "PRIVATE_MSG")
             {
-                process_private_message(ws, parsed_data);
+                this->process_private_message(ws, parsed_data);
             } else if (command == "GET_STATUS")
 	        {
-               process_user_connect(app, ws,  parsed_data, opcode); 
+               process_user_connect(this->app, ws, parsed_data, opcode); 
 	        } else if (command == "SET_USER_MSG")
 	        {
-		       process_set_user(app, ws, parsed_data, opcode);
+		       this->process_set_user(ws, parsed_data, opcode);
 	        } else if (command == "ADD_CHAT")
 	        {
             std::cout << "add chat";
-		    process_add_sub_user(app,ws, parsed_data, opcode);
+		        this->process_add_sub_user(ws, parsed_data, opcode);
             } else {
                 std::string info = "wrong command in message";
                 
                 if (data->unique_name == "null")
-		            log_info(info + str_mes, "ERROR", data->unique_name);
+		            this->log_info(info + str_mes, "ERROR", data->unique_name);
                 else
-                    log_info(info + str_mes, "ERROR", data->first_name);            }
+                    this->log_info(info + str_mes, "ERROR", data->first_name);            }
         } 
             }, .close = [](websock ws, int, std::string_view) {},
     };
+}
 
-    app.ws<UserData>("/*", std::move(wsb));
-
-    app.listen(8887, [](auto*) {});
+void AManager::start(std::string address, int port) {
+    app.ws<UserData>(address, std::move(wsb));
+    
+    app.listen(port, [](auto*) {});
     std::cout << "start" << std::endl;
     app.run();
 }
+
+
+int main()
+{
+    AManager manager = AManager();
+    manager.start("/*", 8887);
+}
+    

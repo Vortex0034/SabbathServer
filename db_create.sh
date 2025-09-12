@@ -1,5 +1,5 @@
 #!/bin/bash
-sql1="CREATE DATABASE sabbath;"
+sql1="CREATE DATABASE sabbath OWNER rufus;"
 
 psql -U postgres -c "$sql1"
 
