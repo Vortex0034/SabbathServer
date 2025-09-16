@@ -70,9 +70,9 @@ void AManager::process_public_message( websock ws, json parsed_data)
 {
     UserData* data = ws->getUserData();
     json payload = {
-        {"command", "PUBLIC_MSG"},
-        {"text", parsed_data["text"]},
-        {"user_from", data->unique_name}
+        {COMMAND_FIELD, "PUBLIC_MSG"},
+        {TEXT_FIELD, parsed_data[TEXT_FIELD]},
+        {USER_FROM_FIELD, data->unique_name}
     };
 
     ws->publish("PUBLIC_CHANNEL", payload.dump());
@@ -84,29 +84,29 @@ void AManager::process_set_user(websock ws, json parsed_data, uWS::OpCode opcode
     UserData* data = ws->getUserData(); 
         
     json payload2;
-    payload2["command"] = "SET_USER_MSG";
-    payload2["name"] = parsed_data["unique_name"];
+    payload2[COMMAND_FIELD] = "SET_USER_MSG";
+    payload2[UNIQUE_NAME_FIELD] = parsed_data[UNIQUE_NAME_FIELD];
     
-    bool found = unique_exist(parsed_data["unique_name"]); 
+    bool found = unique_exist(parsed_data[UNIQUE_NAME_FIELD]); 
 
     if (!found) { 
-        data->unique_name = parsed_data["unique_name"];
-        payload2["status"] = "OK";
+        data->unique_name = parsed_data[UNIQUE_NAME_FIELD];
+        payload2[REQ_STATUS_FIELD] = "OK";
         ws->subscribe(data->unique_name);
         ws->unsubscribe(data->first_name);
         std::map<std::string, std::string> rec;
-        rec["unique_name"] = parsed_data["unique_name"];
-        rec["first_name"] = data->first_name;
-        rec["third_name"] = data->first_name;
-        rec["second_name"] = data->first_name;
+        rec[UNIQUE_NAME_DB_COL] = parsed_data[UNIQUE_NAME_FIELD];
+        rec[FIRST_NAME_DB_COL] = data->first_name;
+        rec[THIRD_NAME_DB_COL] = data->first_name;
+        rec[SECOND_NAME_DB_COL] = data->first_name;
         rec["status"] = "true";
-        this->dbm.make_record(rec, "users");
+        this->dbm.make_record(rec, USERS_DB_TABLE);
 
         log_info("set user info", "INFO", data->unique_name);
         app.publish(data->unique_name, payload2.dump(), opcode);
     } else {
-        payload2["status"] = "USR_EXS";
-        log_info("set user info", "ERROR", data->first_name, parsed_data["unique_name"]);
+        payload2[REQ_STATUS_FIELD] = "USR_EXS";
+        log_info("set user info", "ERROR", data->first_name, parsed_data[UNIQUE_NAME_FIELD]);
         app.publish(data->first_name, payload2.dump(), opcode);
     }
 
@@ -170,8 +170,8 @@ res_tuple DBManager::make_map_frompg(PGresult* res, bool success) {
 }
 
 bool AManager::unique_exist(std::string unique_name) {
-    std::vector<std::string> attrs = {"unique_name"};
-    std::string where = "unique_name = '" + unique_name + "'";
+    std::vector<std::string> attrs = {UNIQUE_NAME_DB_COL};
+    std::string where = UNIQUE_NAME_DB_COL + " = '" + unique_name + "'";
     res_tuple r_result = dbm.make_select_request(attrs, "users", where);
 
     if (r_result["info"]["error"][0] == "false" and r_result["info"]["empty"][0] == "false")
@@ -183,10 +183,10 @@ void AManager::process_private_message(websock ws, json parsed)
 {
     UserData* data = ws->getUserData();
     json payload;
-    payload["command"] = "PRIVATE_MSG";
-    payload["user_from"] = data->unique_name;
-    payload["text"] = parsed["text"];
-    std::string subscriber_name = parsed["user_to"];
+    payload[COMMAND_FIELD] = "PRIVATE_MSG";
+    payload[USER_FROM_FIELD] = data->unique_name;
+    payload[TEXT_FIELD] = parsed[TEXT_FIELD];
+    std::string subscriber_name = parsed[USER_TO_FIELD];
     ws->publish(subscriber_name, payload.dump());
     
     log_info("send private message", "INFO", data->unique_name, subscriber_name);
@@ -217,19 +217,19 @@ void process_user_connect(uWS::App& app, websock ws, json parsed_data, uWS::OpCo
 void AManager::process_add_sub_user(websock ws, json data, uWS::OpCode opcode)
 {
     UserData* user_data = ws->getUserData();
-    json payload = {{"command", "ADD_CHAT"},
-                     {"result", "failed"}};
+    json payload = {{COMMAND_FIELD, "ADD_CHAT"},
+                     {REQ_STATUS_FIELD, "failed"}};
     
-    bool found = unique_exist(data["name"]); 
-    if (data["message"] != "") payload["message"] = data["message"];
+    bool found = unique_exist(data[UNIQUE_NAME_FIELD]); 
+    if (data[TEXT_FIELD] != "") payload[TEXT_FIELD] = data[TEXT_FIELD];
     if (found)
     {
-        payload["result"] = "done";
-        payload["name"] = data["name"];
+        payload[REQ_STATUS_FIELD] = "done";
+        payload[UNIQUE_NAME_FIELD] = data[UNIQUE_NAME_FIELD];
 	
-        log_info("add chat request", "INFO", user_data->unique_name, std::string(data["name"]));
+        log_info("add chat request", "INFO", user_data->unique_name, std::string(data[UNIQUE_NAME_FIELD]));
     } else {
-        log_info("add chat request", "ERROR", user_data->unique_name, std::string(data["name"]));
+        log_info("add chat request", "ERROR", user_data->unique_name, std::string(data[UNIQUE_NAME_FIELD]));
     }
     
     app.publish(user_data->unique_name, payload.dump(), opcode);   
@@ -255,9 +255,9 @@ AManager::AManager() {
         std::string command;
         json parsed_data;
         
-	    parsed_data = json::parse(message);
+	    parsed_data = json::parse(message); // exept
 
-        command = parsed_data["command"];
+        command = parsed_data[COMMAND_FIELD];
      
         
         std::string str_mes = std::string(message);
@@ -278,13 +278,12 @@ AManager::AManager() {
                 this->process_private_message(ws, parsed_data);
             } else if (command == "GET_STATUS")
 	        {
-               process_user_connect(this->app, ws, parsed_data, opcode); 
+                process_user_connect(this->app, ws, parsed_data, opcode); 
 	        } else if (command == "SET_USER_MSG")
 	        {
-		       this->process_set_user(ws, parsed_data, opcode);
+		        this->process_set_user(ws, parsed_data, opcode);
 	        } else if (command == "ADD_CHAT")
 	        {
-            std::cout << "add chat";
 		        this->process_add_sub_user(ws, parsed_data, opcode);
             } else {
                 std::string info = "wrong command in message";
@@ -292,7 +291,8 @@ AManager::AManager() {
                 if (data->unique_name == "null")
 		            this->log_info(info + str_mes, "ERROR", data->unique_name);
                 else
-                    this->log_info(info + str_mes, "ERROR", data->first_name);            }
+                    this->log_info(info + str_mes, "ERROR", data->first_name);
+            }
         } 
             }, .close = [](websock ws, int, std::string_view) {},
     };

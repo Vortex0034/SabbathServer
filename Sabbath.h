@@ -7,18 +7,11 @@ using json = nlohmann::json;
 struct UserData {
     int id;
     std::string unique_name = "null";
-    std::string first_name;
-    std::string second_name;
-    std::string third_name;
-    std::string key;
     bool status = false;
 };
 
 typedef uWS::WebSocket<false, true, UserData>* websock;
 using res_tuple =  std::map<std::string, std::map<std::string, std::vector<std::string>>>;
-std::map<std::string, websock> connected = {};
-
-std::map<std::string, std::string> app_data = {};
 
 class DBManager {
 private:
@@ -41,6 +34,22 @@ public:
 
 class AManager {
 private:
+    const std::string UNIQUE_NAME_FIELD = "unique_name";
+    const std::string COMMAND_FIELD = "command";
+    const std::string TEXT_FIELD = "text";
+    const std::string USER_FROM_FIELD = "user_from";
+    const std::string USER_TO_FIELD = "user_to";
+    const std::string FIRST_NAME_FIELD = "first_name";
+    const std::string SECOND_NAME_FIELD = "second_name";
+    const std::string THIRD_NAME_FIELD = "third_name";
+    const std::string REQ_STATUS_FIELD = "status";
+
+    const std::string UNIQUE_NAME_DB_COL = UNIQUE_NAME_FIELD;
+    const std::string FIRST_NAME_DB_COL = FIRST_NAME_FIELD;
+    const std::string SECOND_NAME_DB_COL = SECOND_NAME_FIELD;
+    const std::string THIRD_NAME_DB_COL = THIRD_NAME_FIELD;
+    const std::string USERS_DB_TABLE = "users";
+
     DBManager dbm = DBManager("dbname=sabbath");
     uWS::App app = uWS::App(); 
     uWS::TemplatedApp<false>::WebSocketBehavior<UserData> wsb;
