@@ -109,9 +109,6 @@ void AManager::process_set_user(websock ws, json parsed_data, uWS::OpCode opcode
         log_info("set user info", "ERROR", data->first_name, parsed_data[UNIQUE_NAME_FIELD]);
         app.publish(data->first_name, payload2.dump(), opcode);
     }
-
-
-    
 }
 
 res_tuple DBManager::make_select_request(std::vector<std::string> args, std::string table_name, std::string where_filter) {
@@ -128,7 +125,6 @@ res_tuple DBManager::make_select_request(std::vector<std::string> args, std::str
     const char* query_massive = query.c_str(); 
     PGresult* res = PQexec(conn, query_massive);
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::cout << PQresultStatus(res);
         log("error to select", "ERROR", PQerrorMessage(conn));
         PQclear(res);
         
@@ -226,6 +222,9 @@ void AManager::process_add_sub_user(websock ws, json data, uWS::OpCode opcode)
     {
         payload[REQ_STATUS_FIELD] = "done";
         payload[UNIQUE_NAME_FIELD] = data[UNIQUE_NAME_FIELD];
+        int channel_id = get_id_from_unique_name(data[UNIQUE_NAME_FIELD]);
+        int user = get_id_from_unique_name(user_data->unique_name);
+        add_chat_db(user, channel_id);
 	
         log_info("add chat request", "INFO", user_data->unique_name, std::string(data[UNIQUE_NAME_FIELD]));
     } else {
@@ -235,14 +234,27 @@ void AManager::process_add_sub_user(websock ws, json data, uWS::OpCode opcode)
     app.publish(user_data->unique_name, payload.dump(), opcode);   
 }
 
+int AManager::get_id_from_unique_name(std::string unique_name) {
+    res_tuple result = dbm.make_select_request({"id"}, USERS_DB_TABLE, UNIQUE_NAME_DB_COL + " = '" + unique_name + "'");
+    return std::stoi(result["result"]["id"][0]);
+}
+
+void AManager::add_chat_db(int user_id, int channel_id) {
+    std::map<std::string, std::string> query;
+    query[SB_USER_ID_COL] = std::to_string(user_id);
+    query[SB_CHANNEL_ID_COL] = std::to_string(channel_id);
+    
+    dbm.make_record(query, SB_TABLE);
+}
+
 AManager::AManager() {
 
+    
     wsb = {
-
         .open = [this](websock ws) {
             UserData* data = ws->getUserData();
             data->status = true;
-            data->first_name = "UnnamedUser";
+            data->first_name = "UnnamedUser" + std::to_string(temp_id);
             this->log_info("new user:", "INFO", data->first_name);
             ws->subscribe("PUBLIC_CHANNEL");
             ws->subscribe(data->first_name);

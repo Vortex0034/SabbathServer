@@ -7,6 +7,7 @@ using json = nlohmann::json;
 struct UserData {
     int id;
     std::string unique_name = "null";
+    std::string first_name;
     bool status = false;
 };
 
@@ -49,9 +50,13 @@ private:
     const std::string SECOND_NAME_DB_COL = SECOND_NAME_FIELD;
     const std::string THIRD_NAME_DB_COL = THIRD_NAME_FIELD;
     const std::string USERS_DB_TABLE = "users";
+    const std::string SB_TABLE = "subscriptions";
+    const std::string SB_USER_ID_COL = "user_id";
+    const std::string SB_CHANNEL_ID_COL = "user_channel_id";
 
     DBManager dbm = DBManager("dbname=sabbath");
-    uWS::App app = uWS::App(); 
+    uWS::App app = uWS::App();
+    int temp_id = 0;
     uWS::TemplatedApp<false>::WebSocketBehavior<UserData> wsb;
 
     bool unique_exist(std::string unique_name); 
@@ -60,7 +65,8 @@ private:
     void log_info(std::string info, std::string grade, std::string from_user = "common", std::string to_user = "common");
     void process_private_message(websock ws, json parsed);
     void process_add_sub_user(websock ws, json data, uWS::OpCode opcode);
-
+    int get_id_from_unique_name(std::string unique_name);
+    void add_chat_db(int user_id, int channel_id);
 public:
     AManager();
     void start(std::string address, int port);

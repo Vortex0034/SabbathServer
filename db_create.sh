@@ -19,7 +19,16 @@ recipient_id INT NOT NULL,
 CONSTRAINT fkey_se FOREIGN KEY (sender_id) REFERENCES Users(id),
 CONSTRAINT fkey_re FOREIGN KEY (recipient_id) REFERENCES Users(id),
 message_text VARCHAR(1024)
-);"
+);
+
+CREATE TABLE subscriptions (
+user_id INT NOT NULL,
+user_channel_id INT NOT NULL,
+CONSTRAINT fkey_us FOREIGN KEY (user_id) REFERENCES Users(id),
+CONSTRAINT fkey_ch FOREIGN KEY (user_channel_id) REFERENCES Users(id),
+CONSTRAINT prke PRIMARY KEY (user_id, user_channel_id)
+);
+"
 
 
 psql -U postgres -d sabbath -c "$sql2"
