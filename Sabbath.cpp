@@ -70,7 +70,7 @@ void AManager::process_public_message( websock ws, json parsed_data)
 {
     UserData* data = ws->getUserData();
     json payload = {
-        {COMMAND_FIELD, "PUBLIC_MSG"},
+        {COMMAND_FIELD, PUBLIC_MSG_COMMAND},
         {TEXT_FIELD, parsed_data[TEXT_FIELD]},
         {USER_FROM_FIELD, data->unique_name}
     };
@@ -84,7 +84,7 @@ void AManager::process_set_user(websock ws, json parsed_data, uWS::OpCode opcode
     UserData* data = ws->getUserData(); 
         
     json payload2;
-    payload2[COMMAND_FIELD] = "SET_USER_MSG";
+    payload2[COMMAND_FIELD] = REG_USER_COMMAND;
     payload2[UNIQUE_NAME_FIELD] = parsed_data[UNIQUE_NAME_FIELD];
     
     bool found = unique_exist(parsed_data[UNIQUE_NAME_FIELD]); 
@@ -96,9 +96,9 @@ void AManager::process_set_user(websock ws, json parsed_data, uWS::OpCode opcode
         ws->unsubscribe(data->first_name);
         std::map<std::string, std::string> rec;
         rec[UNIQUE_NAME_DB_COL] = parsed_data[UNIQUE_NAME_FIELD];
-        rec[FIRST_NAME_DB_COL] = data->first_name;
-        rec[THIRD_NAME_DB_COL] = data->first_name;
-        rec[SECOND_NAME_DB_COL] = data->first_name;
+        rec[FIRST_NAME_DB_COL] = parsed_data[FIRST_NAME_FIELD];
+        rec[THIRD_NAME_DB_COL] = parsed_data[THIRD_NAME_FIELD];
+        rec[SECOND_NAME_DB_COL] = parsed_data[SECOND_NAME_FIELD];
         rec["status"] = "true";
         this->dbm.make_record(rec, USERS_DB_TABLE);
 
@@ -179,7 +179,7 @@ void AManager::process_private_message(websock ws, json parsed)
 {
     UserData* data = ws->getUserData();
     json payload;
-    payload[COMMAND_FIELD] = "PRIVATE_MSG";
+    payload[COMMAND_FIELD] = PRIVATE_MSG_COMMAND;
     payload[USER_FROM_FIELD] = data->unique_name;
     payload[TEXT_FIELD] = parsed[TEXT_FIELD];
     std::string subscriber_name = parsed[USER_TO_FIELD];
@@ -213,7 +213,7 @@ void process_user_connect(uWS::App& app, websock ws, json parsed_data, uWS::OpCo
 void AManager::process_add_sub_user(websock ws, json data, uWS::OpCode opcode)
 {
     UserData* user_data = ws->getUserData();
-    json payload = {{COMMAND_FIELD, "ADD_CHAT"},
+    json payload = {{COMMAND_FIELD, ADD_CHAT_COMMAND},
                      {REQ_STATUS_FIELD, "failed"}};
     
     bool found = unique_exist(data[UNIQUE_NAME_FIELD]); 
@@ -281,22 +281,21 @@ AManager::AManager() {
                 this->log_info(info + str_mes, "ERROR", data->first_name);
         } else {
 
-            if (command == "PUBLIC_MSG")
+            if (command == PUBLIC_MSG_COMMAND)
             {
                 this->process_public_message(ws, parsed_data);
-            }
-            else if (command == "PRIVATE_MSG")
+            } else if (command == PRIVATE_MSG_COMMAND)
             {
                 this->process_private_message(ws, parsed_data);
             } else if (command == "GET_STATUS")
-	        {
+	    {
                 process_user_connect(this->app, ws, parsed_data, opcode); 
-	        } else if (command == "SET_USER_MSG")
-	        {
-		        this->process_set_user(ws, parsed_data, opcode);
-	        } else if (command == "ADD_CHAT")
-	        {
-		        this->process_add_sub_user(ws, parsed_data, opcode);
+	    } else if (command == REG_USER_COMMAND)
+	    {
+	        this->process_set_user(ws, parsed_data, opcode);
+	    } else if (command == ADD_CHAT_COMMAND)
+	    {
+		this->process_add_sub_user(ws, parsed_data, opcode);
             } else {
                 std::string info = "wrong command in message";
                 

@@ -53,6 +53,11 @@ private:
     const std::string SB_TABLE = "subscriptions";
     const std::string SB_USER_ID_COL = "user_id";
     const std::string SB_CHANNEL_ID_COL = "user_channel_id";
+    
+    const std::string REG_USER_COMMAND = "REG_USER_MSG";
+    const std::string PUBLIC_MSG_COMMAND = "PUBLIC_MSG";
+    const std::string ADD_CHAT_COMMAND = "ADD_CHAT";
+    const std::string PRIVATE_MSG_COMMAND = "PRIVATE_MSG";
 
     DBManager dbm = DBManager("dbname=sabbath");
     uWS::App app = uWS::App();
