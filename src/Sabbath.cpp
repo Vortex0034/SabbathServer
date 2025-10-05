@@ -3,7 +3,7 @@
 #include <iostream>
 #include <ctime>
 #include <string>
-#include "Sabbath.h"
+#include "../include/Sabbath.h"
 #include <libpq-fe.h>
 using json = nlohmann::json;
 
