@@ -18,7 +18,7 @@ This is a basic chat server project that demonstrates real-time communication us
 
 Ensure you have the following installed:
 - C++ compiler with C++17 support
-- PostgreSQL development libraries
+- PostgreSQL libpq library
 - uWebSockets and uSockets libraries
 
 ### Database Setup
