@@ -21,35 +21,13 @@ Ensure you have the following installed:
 - PostgreSQL libpq library
 - uWebSockets and uSockets libraries
 
-### Database create
+### Database
 
-```sql
+database_schema.sql file contains the database structure for the Sabbath application.
 
-CREATE TABLE Users ( 
-id SERIAL PRIMARY KEY,
-unique_name VARCHAR(256) NOT NULL,
-first_name VARCHAR(128),
-second_name VARCHAR(128),
-third_name VARCHAR(128),
-status BOOLEAN);
+- **Database Name**: sabbath
+- **Tables**: 3 (users, messages, subscriptions)
 
-CREATE TABLE Messages (
-sender_id INT NOT NULL,
-recipient_id INT NOT NULL,
-CONSTRAINT fkey_se FOREIGN KEY (sender_id) REFERENCES Users(id),
-CONSTRAINT fkey_re FOREIGN KEY (recipient_id) REFERENCES Users(id),
-message_text VARCHAR(1024)
-);
-
-CREATE TABLE subscriptions (
-user_id INT NOT NULL,
-user_channel_id INT NOT NULL,
-CONSTRAINT fkey_us FOREIGN KEY (user_id) REFERENCES Users(id),
-CONSTRAINT fkey_ch FOREIGN KEY (user_channel_id) REFERENCES Users(id),
-CONSTRAINT prke PRIMARY KEY (user_id, user_channel_id)
-);
-
-```
 ### Building from source code
 
 ```bash
